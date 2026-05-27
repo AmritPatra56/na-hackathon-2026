@@ -10,7 +10,7 @@ from pdbx_poly_seq_scheme (or _atom_site as a fallback). Each base is keyed by
 
 Usage:
     python3 layered_basepairs_cif.py <cif> [chains...] [--name NAME] [--block N]
-                                     [--compact]
+                                     [--compact] [--noncanonical]
 
 With no chains, all nucleic-acid chains that form pairs are used automatically,
 so the CIF is the only required input.
@@ -39,6 +39,16 @@ def _flip_lw(lw: str) -> str:
     if lw and len(lw) == 3 and lw[0] in "ct":
         return lw[0] + lw[2] + lw[1]
     return lw
+
+
+WC_PAIRS = ({"A", "U"}, {"G", "C"}, {"A", "T"})   # canonical Watson-Crick base pairs
+
+
+def _is_canonical(lw: str, base_a: str, base_b: str) -> bool:
+    """A canonical Watson-Crick pair: cWW geometry AND A-U/G-C/A-T bases. cWW is a
+    *family*, not 'canonical' -- a cWW U-U or U-G wobble is non-canonical, so it
+    stays on the cWW (L1) layer rather than being dropped."""
+    return lw == "cWW" and {base_a.upper(), base_b.upper()} in WC_PAIRS
 
 
 def _cross(p: tuple[int, int], q: tuple[int, int]) -> bool:
@@ -279,7 +289,8 @@ def _compact_line(pairs: list) -> str:
 
 
 def build(cif: Path, chains: list[str], name: str = "RNA",
-          block: int | None = None, compact: bool = False) -> tuple[str, bool]:
+          block: int | None = None, compact: bool = False,
+          noncanonical: bool = False) -> tuple[str, bool]:
     """Build the layered notation. Returns the text and the round-trip result.
 
     Args:
@@ -291,11 +302,21 @@ def build(cif: Path, chains: list[str], name: str = "RNA",
             (e.g. 'A24,A31') instead of full-width dot-bracket; cWW stays
             dot-bracket. Saves space on large RNA, where most non-WC lines are
             almost all dots.
+        noncanonical: keep only non-canonical pairs (dropping true Watson-Crick
+            A-U/G-C/A-T pairs). Judged by the bases, not the family, so a cWW U-U
+            or U-G wobble is kept and still shown on the cWW (L1) layer.
     """
     if not chains:
         chains = list_chains(cif)
     per_chain = read_residues(cif, chains)
     pairs = read_pairs(cif, set(chains))
+
+    if noncanonical:
+        base_of = {(ch, num): letter
+                   for ch, lst in per_chain.items() for num, letter in lst}
+        pairs = [p for p in pairs
+                 if not _is_canonical(p[2], base_of.get((p[0][0], p[0][2]), "?"),
+                                            base_of.get((p[1][0], p[1][2]), "?"))]
 
     # One strand per (chain, symmetry): the identity copy (1_555) of each requested
     # chain, plus any symmetry copies that appear in the pairs (deterministic order).
@@ -413,8 +434,12 @@ if __name__ == "__main__":
                     help="print sparse non-cWW layers as explicit pair lists "
                          "(e.g. A24,A31) instead of dot-bracket; saves space on "
                          "large RNA")
+    ap.add_argument("--noncanonical", action="store_true",
+                    help="show only non-canonical pairs (drop true Watson-Crick "
+                         "A-U/G-C/A-T); a cWW U-U or U-G wobble is kept on L1")
     a = ap.parse_args()
-    text, ok = build(a.cif, a.chains, name=a.name, block=a.block, compact=a.compact)
+    text, ok = build(a.cif, a.chains, name=a.name, block=a.block,
+                     compact=a.compact, noncanonical=a.noncanonical)
     print(text)
     print(f"\n# round-trip recovers all pairs exactly: {ok}", file=sys.stderr)
     sys.exit(0 if ok else 1)
