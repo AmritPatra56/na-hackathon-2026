@@ -15,9 +15,9 @@ Usage:
 With no chains, all nucleic-acid chains that form pairs are used automatically,
 so the CIF is the only required input.
 
-Examples:
-    python3 layered_basepairs_cif.py 9cfn.cif --name 9CFN     # auto chains
-    python3 layered_basepairs_cif.py 9cfn.cif A --name 9CFN   # one chain
+Examples (9cfn-bps.cif is the DNATCO-extended 9CFN, included in this folder):
+    python3 layered_basepairs_cif.py 9cfn-bps.cif --name 9CFN     # auto chains
+    python3 layered_basepairs_cif.py 9cfn-bps.cif A --name 9CFN   # one chain
 
 The notation prints to stdout; the round-trip check (True = lossless) to stderr.
 """
